@@ -85,6 +85,7 @@ func (h *WebUiHandler) handleWebUiRequest(w http.ResponseWriter, r *http.Request
 
 	tokenData, exists := h.db.GetTokenData(token)
 	if !exists {
+		fmt.Println(fmt.Sprintf("%s Invalid login from IP : %s", time.Now().Format(time.RFC3339), r.RemoteAddr))
 		h.sendLoginPage(w, r, 403)
 		return
 	}
@@ -480,6 +481,7 @@ func (h *WebUiHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	tokenList, ok := r.Form["access_token"]
 
 	if !ok {
+		fmt.Println(fmt.Sprintf("%s Invalid login from IP : %s", time.Now().Format(time.RFC3339), r.RemoteAddr))
 		w.WriteHeader(400)
 		w.Write([]byte("Token required for login"))
 		return
@@ -498,6 +500,7 @@ func (h *WebUiHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, cookie)
 		http.Redirect(w, r, "/tunnels", 303)
 	} else {
+		fmt.Println(fmt.Sprintf("%s Invalid login from IP : %s", time.Now().Format(time.RFC3339), r.RemoteAddr))
 		h.sendLoginPage(w, r, 403)
 		return
 	}
