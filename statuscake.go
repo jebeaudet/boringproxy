@@ -11,22 +11,20 @@ import (
 var ips []string = nil
 
 func GetStatusCakeIps() ([]string, error) {
+	var err error
 	if ips == nil {
-		err := initialize()
-		if err != nil {
-			return nil, err
-		}
+		err = initialize()
 	}
-	return ips, nil
+	return ips, err
 }
 
 func initialize() error {
-	err := getStatusCakeIpsFromApi()
+	err := updateStatusCakeIpsFromApi()
 	go refreshIps()
 	return err
 }
 
-func getStatusCakeIpsFromApi() error {
+func updateStatusCakeIpsFromApi() error {
 	url := "https://app.statuscake.com/Workfloor/Locations.php?format=json"
 
 	response, err := http.Get(url)
@@ -56,7 +54,6 @@ func getStatusCakeIpsFromApi() error {
 	}
 
 	ips = ipList
-	go refreshIps()
 	return nil
 }
 
@@ -67,6 +64,6 @@ func refreshIps() {
 		} else {
 			time.Sleep(time.Hour)
 		}
-		getStatusCakeIpsFromApi()
+		updateStatusCakeIpsFromApi()
 	}
 }
