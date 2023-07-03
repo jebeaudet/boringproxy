@@ -73,6 +73,7 @@ func Listen() {
 
 	log.Println("Starting up")
 
+	// https://lite.ip2location.com/database-download
 	ipDb, err := ip2location.OpenDB("/home/boringproxy/ip/IP2LOCATION-LITE-DB3.IPV6.BIN")
 	if err != nil {
 		log.Fatal(err)
