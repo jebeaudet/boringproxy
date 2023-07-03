@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/caddyserver/certmagic"
+	"github.com/ip2location/ip2location-go/v9"
 	"github.com/mdp/qrterminal/v3"
 
 	"github.com/takingnames/namedrop-go"
@@ -36,16 +37,23 @@ type SmtpConfig struct {
 }
 
 type Server struct {
-	db           *Database
-	tunMan       *TunnelManager
-	httpClient   *http.Client
-	httpListener *PassthroughListener
+	allowedCountries *AllowedCountries
+	db               *Database
+	tunMan           *TunnelManager
+	httpClient       *http.Client
+	httpListener     *PassthroughListener
+}
+
+type AllowedCountries struct {
+	ipDb             *ip2location.DB
+	allowedCountries []string
 }
 
 func Listen() {
 	flagSet := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	newAdminDomain := flagSet.String("admin-domain", "", "Admin Domain")
 	sshServerPort := flagSet.Int("ssh-server-port", 22, "SSH Server Port")
+	allowedCountriesStr := flagSet.String("allowed-countries", "CA", "Comma separated allowed countries")
 	dbDir := flagSet.String("db-dir", "", "Database file directory")
 	certDir := flagSet.String("cert-dir", "", "TLS cert directory")
 	printLogin := flagSet.Bool("print-login", false, "Prints admin login information")
@@ -64,6 +72,12 @@ func Listen() {
 	}
 
 	log.Println("Starting up")
+
+	ipDb, err := ip2location.OpenDB("/home/boringproxy/ip/IP2LOCATION-LITE-DB3.IPV6.BIN")
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
 
 	db, err := NewDatabase(*dbDir)
 	if err != nil {
@@ -190,7 +204,7 @@ func Listen() {
 
 	httpListener := NewPassthroughListener()
 
-	p := &Server{db, tunMan, httpClient, httpListener}
+	p := &Server{&AllowedCountries{ipDb, strings.Split(*allowedCountriesStr, ",")}, db, tunMan, httpClient, httpListener}
 
 	tlsConfig := &tls.Config{
 		GetCertificate: certConfig.GetCertificate,
@@ -358,6 +372,49 @@ func (p *Server) handleConnection(clientConn net.Conn, certConfig *certmagic.Con
 	passConn := NewProxyConn(clientConn, clientReader)
 
 	tunnel, exists := p.db.GetTunnel(clientHello.ServerName)
+
+	isStatusCake := false
+	ipStr, _, err := net.SplitHostPort(clientConn.RemoteAddr().String())
+	if err != nil {
+		log.Printf("Error while parsing the ip '%s', ignoring ip restriction : '%v'", clientConn.RemoteAddr().String(), err)
+	} else {
+		location, err := p.allowedCountries.ipDb.Get_country_short(ipStr)
+		if err != nil {
+			log.Printf("Error while getting the country of ip '%s' : '%v'", ipStr, err)
+		} else {
+			allowed := false
+			for _, country := range p.allowedCountries.allowedCountries {
+				if location.Country_short == country {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				statusCakeIps, err := GetStatusCakeIps()
+				if err != nil {
+					log.Println("Could not get IP from status cake API, ignoring.")
+				} else {
+					for _, statusCakeIp := range statusCakeIps {
+						if ipStr == statusCakeIp {
+							allowed = true
+							isStatusCake = true
+							break
+						}
+					}
+				}
+			}
+
+			if !allowed {
+				log.Printf("Denying the access to IP '%s' because its country is '%s'.", ipStr, location.Country_short)
+				clientConn.Close()
+				return
+			}
+		}
+	}
+
+	if exists {
+		log.Printf("New allowed tunnel connection to '%s' from IP '%s'. StatusCake request : '%t'", tunnel.Domain, clientConn.RemoteAddr(), isStatusCake)
+	}
 
 	if exists && (tunnel.TlsTermination == "client" || tunnel.TlsTermination == "passthrough") || tunnel.TlsTermination == "client-tls" {
 		p.passthroughRequest(passConn, tunnel)

@@ -14,6 +14,7 @@ require (
 
 require (
 	github.com/golang/protobuf v1.4.2 // indirect
+	github.com/ip2location/ip2location-go/v9 v9.6.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/libdns/libdns v0.2.1 // indirect
 	github.com/mholt/acmez v1.0.1 // indirect
@@ -27,5 +28,6 @@ require (
 	golang.org/x/text v0.3.6 // indirect
 	google.golang.org/appengine v1.6.6 // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
+	lukechampine.com/uint128 v1.2.0 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )
