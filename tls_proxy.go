@@ -63,7 +63,7 @@ func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 	}
 
 	if err != nil {
-		log.Print(err)
+		log.Println("Error when establishing connection:", err)
 		return
 	}
 
@@ -76,7 +76,7 @@ func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 	go func() {
 		_, err := io.Copy(upstreamConn, conn)
 		if err != nil {
-			log.Println(err.Error())
+			log.Println("Error when copying request to upstream:", err)
 		}
 
 		if c, ok := upstreamConn.(*net.TCPConn); ok {
@@ -93,7 +93,7 @@ func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 		_, err := io.Copy(conn, upstreamConn)
 		//conn.(*net.TCPConn).CloseWrite()
 		if err != nil {
-			log.Println(err.Error())
+			log.Println("Error when copying response to downstream:", err)
 		}
 		// TODO: I added this to fix a bug where the copy to
 		// upstreamConn was never closing, even though the copy to
