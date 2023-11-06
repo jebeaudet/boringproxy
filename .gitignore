@@ -1,3 +1,4 @@
+.DS_Store
 /dist
 boringproxy_db.json
 cmd/boringproxy/boringproxy

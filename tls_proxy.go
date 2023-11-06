@@ -40,8 +40,6 @@ func ProxyTcp(conn net.Conn, addr string, port int, useTls bool, certConfig *cer
 
 func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 
-	defer conn.Close()
-
 	useTls := false
 	addr := upstreamAddr
 
@@ -64,25 +62,20 @@ func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 
 	if err != nil {
 		log.Println("Error when establishing connection:", err)
+		conn.Close()
 		return
 	}
-
-	defer upstreamConn.Close()
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 
 	// Copy request to upstream
 	go func() {
+		defer upstreamConn.Close()
+		defer conn.Close()
 		_, err := io.Copy(upstreamConn, conn)
 		if err != nil {
 			log.Println("Error when copying request to upstream:", err)
-		}
-
-		if c, ok := upstreamConn.(*net.TCPConn); ok {
-			c.CloseWrite()
-		} else if c, ok := upstreamConn.(*tls.Conn); ok {
-			c.CloseWrite()
 		}
 
 		wg.Done()
@@ -90,17 +83,12 @@ func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 
 	// Copy response to downstream
 	go func() {
+		defer upstreamConn.Close()
+		defer conn.Close()
 		_, err := io.Copy(conn, upstreamConn)
-		//conn.(*net.TCPConn).CloseWrite()
 		if err != nil {
 			log.Println("Error when copying response to downstream:", err)
 		}
-		// TODO: I added this to fix a bug where the copy to
-		// upstreamConn was never closing, even though the copy to
-		// conn was. It seems related to persistent connections going
-		// idle and upstream closing the connection. I'm a bit worried
-		// this might not be thread safe.
-		conn.Close()
 		wg.Done()
 	}()
 
