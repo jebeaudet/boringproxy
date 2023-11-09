@@ -321,6 +321,7 @@ func (c *Client) BoreTunnel(ctx context.Context, tunnel Tunnel) error {
 			NextProtos:     []string{"h2", "acme-tls/1"},
 		}
 		tlsListener := tls.NewListener(listener, tlsConfig)
+		defer tlsListener.Close()
 
 		httpMux := http.NewServeMux()
 
@@ -339,7 +340,6 @@ func (c *Client) BoreTunnel(ctx context.Context, tunnel Tunnel) error {
 		go httpServer.Serve(tlsListener)
 
 	} else {
-
 		go func() {
 			for {
 				conn, err := listener.Accept()
