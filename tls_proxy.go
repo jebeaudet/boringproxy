@@ -73,7 +73,7 @@ func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 	go func() {
 		_, err := io.Copy(upstreamConn, conn)
 		if err != nil {
-			log.Println("Error when copying request to upstream:", err)
+			log.Printf("Error when copying request to upstream (%s:%d): %s", upstreamAddr, port, err)
 		}
 
 		wg.Done()
@@ -83,7 +83,7 @@ func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 	go func() {
 		_, err := io.Copy(conn, upstreamConn)
 		if err != nil {
-			log.Println("Error when copying response to downstream:", err)
+			log.Printf("Error when copying response to downstream (%s:%d): %s", upstreamAddr, port, err)
 		}
 		wg.Done()
 	}()
@@ -91,13 +91,13 @@ func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 	defer func() {
 		err := upstreamConn.Close()
 		if err != nil {
-			log.Println("Error while closing upstream connection:", err)
+			log.Printf("Error while closing upstream connection (%s:%d): %s", upstreamAddr, port, err)
 		}
 	}()
 	defer func() {
 		err := conn.Close()
 		if err != nil {
-			log.Println("Error while closing connection:", err)
+			log.Printf("Error while closing connection (%s:%d): %s", upstreamAddr, port, err)
 		}
 	}()
 	wg.Wait()
