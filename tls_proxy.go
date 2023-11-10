@@ -9,6 +9,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/caddyserver/certmagic"
 )
@@ -66,11 +67,18 @@ func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 		return
 	}
 
+	log.Println("Starting proxying")
+	deadline := time.Now().Add(5 * time.Hour)
+	conn.SetDeadline(deadline)
+	upstreamConn.SetDeadline(deadline)
+
 	var wg sync.WaitGroup
 	wg.Add(2)
 
 	// Copy request to upstream
 	go func() {
+		defer upstreamConn.Close()
+		defer conn.Close()
 		_, err := io.Copy(upstreamConn, conn)
 		if err != nil {
 			log.Printf("Error when copying request to upstream (%s:%d): %s", upstreamAddr, port, err)
@@ -81,24 +89,14 @@ func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 
 	// Copy response to downstream
 	go func() {
+		defer upstreamConn.Close()
+		defer conn.Close()
 		_, err := io.Copy(conn, upstreamConn)
 		if err != nil {
 			log.Printf("Error when copying response to downstream (%s:%d): %s", upstreamAddr, port, err)
 		}
 		wg.Done()
 	}()
-
-	defer func() {
-		err := upstreamConn.Close()
-		if err != nil {
-			log.Printf("Error while closing upstream connection (%s:%d): %s", upstreamAddr, port, err)
-		}
-	}()
-	defer func() {
-		err := conn.Close()
-		if err != nil {
-			log.Printf("Error while closing connection (%s:%d): %s", upstreamAddr, port, err)
-		}
-	}()
 	wg.Wait()
+	log.Println("All done")
 }
