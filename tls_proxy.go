@@ -68,7 +68,7 @@ func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 	}
 
 	log.Println("Starting proxying")
-	deadline := time.Now().Add(5 * time.Hour)
+	deadline := time.Now().Add(3 * time.Hour)
 	conn.SetDeadline(deadline)
 	upstreamConn.SetDeadline(deadline)
 
