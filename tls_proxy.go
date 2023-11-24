@@ -67,7 +67,6 @@ func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 		return
 	}
 
-	log.Println("Starting proxying")
 	deadline := time.Now().Add(3 * time.Hour)
 	conn.SetDeadline(deadline)
 	upstreamConn.SetDeadline(deadline)
@@ -77,26 +76,27 @@ func handleConnection(conn net.Conn, upstreamAddr string, port int) {
 
 	// Copy request to upstream
 	go func() {
+		defer wg.Done()
 		defer upstreamConn.Close()
 		defer conn.Close()
 		_, err := io.Copy(upstreamConn, conn)
 		if err != nil {
 			log.Printf("Error when copying request to upstream (%s:%d): %s", upstreamAddr, port, err)
 		}
-
-		wg.Done()
 	}()
 
 	// Copy response to downstream
 	go func() {
-		defer upstreamConn.Close()
+		defer wg.Done()
 		defer conn.Close()
+		defer upstreamConn.Close()
 		_, err := io.Copy(conn, upstreamConn)
 		if err != nil {
 			log.Printf("Error when copying response to downstream (%s:%d): %s", upstreamAddr, port, err)
 		}
-		wg.Done()
 	}()
+
+	defer upstreamConn.Close()
+	defer conn.Close()
 	wg.Wait()
-	log.Println("All done")
 }
