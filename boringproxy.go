@@ -53,7 +53,7 @@ func Listen() {
 	flagSet := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	newAdminDomain := flagSet.String("admin-domain", "", "Admin Domain")
 	sshServerPort := flagSet.Int("ssh-server-port", 22, "SSH Server Port")
-	allowedCountriesStr := flagSet.String("allowed-countries", "CA", "Comma separated allowed countries")
+	allowedCountriesStr := flagSet.String("allowed-countries", "CA,US", "Comma separated allowed countries")
 	dbDir := flagSet.String("db-dir", "", "Database file directory")
 	certDir := flagSet.String("cert-dir", "", "TLS cert directory")
 	printLogin := flagSet.Bool("print-login", false, "Prints admin login information")
