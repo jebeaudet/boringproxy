@@ -375,6 +375,7 @@ func (p *Server) handleConnection(clientConn net.Conn, certConfig *certmagic.Con
 	tunnel, exists := p.db.GetTunnel(clientHello.ServerName)
 
 	isStatusCake := false
+	isAcme := false
 	ipStr, _, err := net.SplitHostPort(clientConn.RemoteAddr().String())
 	if err != nil {
 		log.Printf("Error while parsing the ip '%s', ignoring ip restriction : '%v'", clientConn.RemoteAddr().String(), err)
@@ -405,6 +406,16 @@ func (p *Server) handleConnection(clientConn net.Conn, certConfig *certmagic.Con
 				}
 			}
 
+			if !allowed && clientHello.SupportedProtos != nil {
+				for _, proto := range clientHello.SupportedProtos {
+					if proto == "acme-tls/1" {
+						allowed = true
+						isAcme = true
+						break
+					}
+				}
+			}
+
 			if !allowed {
 				log.Printf("Denying the access to IP '%s' because its country is '%s'.", ipStr, location.Country_short)
 				clientConn.Close()
@@ -414,7 +425,7 @@ func (p *Server) handleConnection(clientConn net.Conn, certConfig *certmagic.Con
 	}
 
 	if exists {
-		log.Printf("New allowed tunnel connection to '%s' from IP '%s'. StatusCake request : '%t'", tunnel.Domain, clientConn.RemoteAddr(), isStatusCake)
+		log.Printf("New allowed tunnel connection to '%s' from IP '%s'. StatusCake request : '%t'. ACME request : '%t'", tunnel.Domain, clientConn.RemoteAddr(), isStatusCake, isAcme)
 	}
 
 	if exists && (tunnel.TlsTermination == "client" || tunnel.TlsTermination == "passthrough") || tunnel.TlsTermination == "client-tls" {
