@@ -6,18 +6,15 @@ import (
 	"io/ioutil"
 	"log"
 	"sync"
-
-	"github.com/takingnames/namedrop-go"
 )
 
 var DBFolderPath string
 
 type Database struct {
-	AdminDomain string                         `json:"admin_domain"`
-	Tokens      map[string]TokenData           `json:"tokens"`
-	Tunnels     map[string]Tunnel              `json:"tunnels"`
-	Users       map[string]User                `json:"users"`
-	dnsRequests map[string]namedrop.DNSRequest `json:"dns_requests"`
+	AdminDomain string               `json:"admin_domain"`
+	Tokens      map[string]TokenData `json:"tokens"`
+	Tunnels     map[string]Tunnel    `json:"tunnels"`
+	Users       map[string]User      `json:"users"`
 	mutex       *sync.Mutex
 }
 
@@ -92,10 +89,6 @@ func NewDatabase(path string) (*Database, error) {
 		db.Users = make(map[string]User)
 	}
 
-	if db.dnsRequests == nil {
-		db.dnsRequests = make(map[string]namedrop.DNSRequest)
-	}
-
 	db.mutex = &sync.Mutex{}
 
 	db.mutex.Lock()
@@ -118,33 +111,6 @@ func (d *Database) GetAdminDomain() string {
 	defer d.mutex.Unlock()
 
 	return d.AdminDomain
-}
-
-func (d *Database) SetDNSRequest(requestId string, request namedrop.DNSRequest) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-
-	d.dnsRequests[requestId] = request
-
-	// Not currently persisting because dnsRequests is only stored in
-	// memory. May change in the future.
-	//d.persist()
-}
-func (d *Database) GetDNSRequest(requestId string) (namedrop.DNSRequest, error) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-
-	if req, ok := d.dnsRequests[requestId]; ok {
-		return req, nil
-	}
-
-	return namedrop.DNSRequest{}, errors.New("No such DNS Request")
-}
-func (d *Database) DeleteDNSRequest(requestId string) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-
-	delete(d.dnsRequests, requestId)
 }
 
 func (d *Database) AddToken(owner, client string) (string, error) {

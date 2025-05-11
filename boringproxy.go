@@ -18,15 +18,12 @@ import (
 	"github.com/caddyserver/certmagic"
 	"github.com/ip2location/ip2location-go/v9"
 	"github.com/mdp/qrterminal/v3"
-
-	"github.com/takingnames/namedrop-go"
 )
 
 type Config struct {
-	SshServerPort  int    `json:"ssh_server_port"`
-	PublicIp       string `json:"public_ip"`
-	namedropClient *namedrop.Client
-	autoCerts      bool
+	SshServerPort int    `json:"ssh_server_port"`
+	PublicIp      string `json:"public_ip"`
+	autoCerts     bool
 }
 
 type SmtpConfig struct {
@@ -85,28 +82,7 @@ func Listen() {
 		log.Fatal(err)
 	}
 
-	namedropClient := namedrop.NewClient(db, db.GetAdminDomain(), "takingnames.io/namedrop")
-
-	var ip string
-
-	if *publicIp != "" {
-		ip = *publicIp
-	} else {
-		ip, err = namedropClient.GetPublicIp()
-		if err != nil {
-			fmt.Printf("WARNING: Failed to determine public IP: %s\n", err.Error())
-		}
-	}
-
-	err = namedrop.CheckPublicAddress(ip, *httpPort)
-	if err != nil {
-		fmt.Printf("WARNING: Failed to access %s:%d from the internet\n", ip, *httpPort)
-	}
-
-	err = namedrop.CheckPublicAddress(ip, *httpsPort)
-	if err != nil {
-		fmt.Printf("WARNING: Failed to access %s:%d from the internet\n", ip, *httpsPort)
-	}
+	var ip = *publicIp
 
 	autoCerts := true
 	if *httpPort != 80 || *httpsPort != 443 {
@@ -147,7 +123,7 @@ func Listen() {
 
 	if adminDomain == "" {
 
-		err = setAdminDomain(certConfig, db, namedropClient, autoCerts)
+		err = setAdminDomain(certConfig, db, autoCerts)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -182,10 +158,9 @@ func Listen() {
 	}
 
 	config := &Config{
-		SshServerPort:  *sshServerPort,
-		PublicIp:       ip,
-		namedropClient: namedropClient,
-		autoCerts:      autoCerts,
+		SshServerPort: *sshServerPort,
+		PublicIp:      ip,
+		autoCerts:     autoCerts,
 	}
 
 	tunMan := NewTunnelManager(config, db, certConfig)
@@ -227,83 +202,7 @@ func Listen() {
 		hostParts := strings.Split(r.Host, ":")
 		hostDomain := hostParts[0]
 
-		if r.URL.Path == "/namedrop/callback" {
-			r.ParseForm()
-
-			errorParam := r.Form.Get("error")
-			requestId := r.Form.Get("state")
-			code := r.Form.Get("code")
-
-			if errorParam != "" {
-				db.DeleteDNSRequest(requestId)
-
-				http.Redirect(w, r, "/alert?message=Domain request failed", 303)
-				return
-			}
-
-			namedropTokenData, err := namedropClient.GetToken(requestId, code)
-			if err != nil {
-				w.WriteHeader(500)
-				io.WriteString(w, err.Error())
-				return
-			}
-
-			domain := namedropTokenData.Scopes[0].Domain
-			host := namedropTokenData.Scopes[0].Host
-
-			recordType := "AAAA"
-			if IsIPv4(config.PublicIp) {
-				recordType = "A"
-			}
-
-			createRecordReq := namedrop.Record{
-				Domain: domain,
-				Host:   host,
-				Type:   recordType,
-				Value:  config.PublicIp,
-				TTL:    300,
-			}
-
-			err = namedropClient.CreateRecord(createRecordReq)
-			if err != nil {
-				w.WriteHeader(500)
-				io.WriteString(w, err.Error())
-				return
-			}
-
-			fqdn := host + "." + domain
-
-			if db.GetAdminDomain() == "" {
-				db.SetAdminDomain(fqdn)
-				namedropClient.SetDomain(fqdn)
-
-				if autoCerts {
-					// TODO: Might want to get all certs here, not just the admin domain
-					err := certConfig.ManageSync(r.Context(), []string{fqdn})
-					if err != nil {
-						log.Fatal(err)
-					}
-				}
-
-				url := fmt.Sprintf("https://%s", fqdn)
-
-				// Automatically log using the first found admin token. This is safe to do here
-				// because we know that retrieving the admin domain was initiated from the CLI.
-				tokens := db.GetTokens()
-				for token, tokenData := range tokens {
-					if tokenData.Owner == "admin" {
-						url = url + "/login?access_token=" + token
-						break
-					}
-				}
-
-				http.Redirect(w, r, url, 303)
-			} else {
-				adminDomain := db.GetAdminDomain()
-				http.Redirect(w, r, fmt.Sprintf("https://%s/edit-tunnel?domain=%s", adminDomain, fqdn), 303)
-			}
-
-		} else if hostDomain == db.GetAdminDomain() {
+		if hostDomain == db.GetAdminDomain() {
 			if strings.HasPrefix(r.URL.Path, "/api/") {
 				http.StripPrefix("/api", api).ServeHTTP(w, r)
 			} else {
@@ -470,8 +369,8 @@ func (p *Server) passthroughRequest(conn net.Conn, tunnel Tunnel) {
 	wg.Wait()
 }
 
-func setAdminDomain(certConfig *certmagic.Config, db *Database, namedropClient *namedrop.Client, autoCerts bool) error {
-	action := prompt("\nNo admin domain set. Select an option below:\nEnter '1' to input manually\nEnter '2' to configure through TakingNames.io\n")
+func setAdminDomain(certConfig *certmagic.Config, db *Database, autoCerts bool) error {
+	action := prompt("\nNo admin domain set. Select an option below:\nEnter '1' to input manually\n")
 	switch action {
 	case "1":
 		adminDomain := prompt("\nEnter admin domain:\n")
@@ -484,19 +383,6 @@ func setAdminDomain(certConfig *certmagic.Config, db *Database, namedropClient *
 		}
 
 		db.SetAdminDomain(adminDomain)
-	case "2":
-
-		log.Println("Get bootstrap domain")
-
-		namedropLink, err := namedropClient.BootstrapLink()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		qrterminal.GenerateHalfBlock(namedropLink, qrterminal.L, os.Stdout)
-		fmt.Println("Use the link below or scan the QR code above to select an admin domain:\n")
-		fmt.Printf("%s\n\n", namedropLink)
-
 	default:
 		log.Fatal("Invalid option")
 	}

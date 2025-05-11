@@ -3,12 +3,15 @@ package boringproxy
 import (
 	"embed"
 	"encoding/base64"
+
 	//"encoding/json"
 	"fmt"
-	qrcode "github.com/skip2/go-qrcode"
 	"html/template"
 	"io"
 	"net/http"
+
+	qrcode "github.com/skip2/go-qrcode"
+
 	//"net/url"
 	//"os"
 	"strings"
@@ -280,11 +283,6 @@ func (h *WebUiHandler) handleWebUiRequest(w http.ResponseWriter, r *http.Request
 		message := r.Form.Get("message")
 
 		h.alertDialog(w, r, message, "/")
-	case "/takingnames":
-
-		namedropLink := h.config.namedropClient.DomainRequestLink()
-
-		http.Redirect(w, r, namedropLink, 303)
 	default:
 		if strings.HasPrefix(r.URL.Path, "/tunnels/") {
 
